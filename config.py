@@ -43,5 +43,8 @@ loss_label_smoothing = 1e-1
 # =============================================================
 
 # ============ Config related to experiments name ============
-exp_name = f"TransformOrigin_Epoch{epochs}_Batch{batch_size}_Lr{learning_rate}_Smoothing{loss_label_smoothing}"
+exp_name = f"TransformOrigin_Epoch{epochs}_Batch{batch_size}_Lr{learning_rate}_Smoothing{loss_label_smoothing}/"
 # =============================================================
+
+# resume = "checkpoint/" + exp_name + "epoch_35.pt"
+resume = None

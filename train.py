@@ -181,6 +181,52 @@ def save_lr_graph(lr_list: list, cfg):
     print(f"Learning Rate graph saved at {save_path}")
 
 
+def save_checkpoint(model, optimizer, scheduler, epoch, save_dir, filename):
+    """
+    model, optimizer, scheduler 상태를 포함한 checkpoint 저장
+    """
+    save_path = os.path.join(save_dir, filename)
+    
+    checkpoint = {
+        "epoch": epoch,
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "scheduler_state_dict": scheduler.state_dict()
+    }
+    
+    torch.save(checkpoint, save_path)
+    print(f"Checkpoint saved at {save_path}")
+
+
+def load_checkpoint(checkpoint_path, model, optimizer=None, scheduler=None, device="cpu"):
+    """
+    checkpoint 불러오기.
+    model은 필수, optimizer와 scheduler는 resume 학습용 선택적
+    반환값: 이어서 학습할 start_epoch
+    """
+    if not os.path.isfile(checkpoint_path):
+        raise FileNotFoundError(f"{checkpoint_path} does not exist.")
+
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+
+    # 모델 상태 로드
+    model.load_state_dict(checkpoint["model_state_dict"])
+    print(f"✅ Model weights loaded from {checkpoint_path}")
+
+    start_epoch = checkpoint.get("epoch", 0) + 1  # 이어서 학습할 epoch
+
+    # optimizer, scheduler 상태 로드 (resume 학습용)
+    if optimizer is not None and "optimizer_state_dict" in checkpoint:
+        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        print("✅ Optimizer state loaded")
+
+    if scheduler is not None and "scheduler_state_dict" in checkpoint:
+        scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+        print("✅ Scheduler state loaded")
+
+    return start_epoch
+
+
 def main():
     cfg = config
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -226,19 +272,25 @@ def main():
     # Init Loss Function -> CrossEntropyLoss
     loss_fn = nn.CrossEntropyLoss(label_smoothing=cfg.loss_label_smoothing)
 
-    train_loss_list, valid_loss_list = [], []
-    train_accuracy_list, valid_accuracy_list = [], []
-    lr_list = []
-
+    # save path
     model_save_path = os.path.join("checkpoint", cfg.exp_name)
     os.makedirs(model_save_path, exist_ok=True)
 
     latest_loss = np.inf
     patience = 0
     early_stopping = 10
+
+    train_loss_list, valid_loss_list = [], []
+    train_accuracy_list, valid_accuracy_list = [], []
+    lr_list = []
+
+    # Resume training
+    start_epoch = 0
+    if cfg.resume:
+        start_epoch = load_checkpoint(cfg.resume, model, optimizer, scheduler, device)
     
-    # Train pipeline per epoch
-    for epoch in range(cfg.epochs):     # 100 epoch
+    # Train Loop
+    for epoch in range(start_epoch, cfg.epochs):     # 100 epoch
         loss_dict, accuracy_dict = run_epoch(model, loader_dict, optimizer, loss_fn, epoch, device)
         
         current_lr = optimizer.param_groups[0]['lr']
@@ -248,21 +300,24 @@ def main():
 
         train_loss_list.append(loss_dict['train_loss'])
         valid_loss_list.append(loss_dict['valid_loss'])
-
         train_accuracy_list.append(accuracy_dict['train_accuracy'])
         valid_accuracy_list.append(accuracy_dict['valid_accuracy'])
 
-        torch.save(model.state_dict(), os.path.join(model_save_path, f"epoch_{epoch+1}.pt"))
+        # ↓ 지금 model의 파라미터만 저장중임
+        # torch.save(model.state_dict(), os.path.join(model_save_path, f"epoch_{epoch+1}.pt"))
+        save_checkpoint(model, optimizer, scheduler, epoch, model_save_path, f"epoch_{epoch+1}.pt")
 
         # ===== early stopping =====
         if latest_loss > loss_dict['valid_loss']:
             latest_loss = loss_dict['valid_loss']
             patience = 0
-            torch.save(model.state_dict(), os.path.join(model_save_path, f"best.pt"))
+            # torch.save(model.state_dict(), os.path.join(model_save_path, f"best.pt"))
+            save_checkpoint(model, optimizer, scheduler, epoch, model_save_path, "best.pt")
             print(f"Saved best.pt file at {epoch+1}epoch")
         else:
             patience += 1
-            if early_stopping <= patience:
+            if patience >= early_stopping:
+                print(f"Early stopping!")
                 break
 
 
