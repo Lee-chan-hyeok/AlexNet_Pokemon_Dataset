@@ -31,8 +31,8 @@ class ChleeCNN(nn.Module):
 
         self.classifier = nn.Sequential(
             nn.Dropout(p=0.5),
-            # nn.Linear(256*6*6, 4096),   # nn.LazyLinear(4096) : in_features를 자동으로 계산해줌.
-            nn.LazyLinear(4096),
+            nn.Linear(256*6*6, 4096),
+            # nn.LazyLinear(4096),      # nn.LazyLinear(4096) : in_features를 자동으로 계산해줌.
             nn.ReLU(inplace=True),
 
             nn.Dropout(p=0.5),

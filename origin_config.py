@@ -7,9 +7,10 @@ num_classes = 149
 
 
 # ============ Config related to Dataset ============
-train_data_path = "PokemonDataset_Split/train"
-valid_data_path = "PokemonDataset_Split/valid"
+train_data_path = "PokemonDataset_Sample/train"
+valid_data_path = "PokemonDataset_Sample/valid"
 
+# train No Aug
 train_transform = transforms.Compose([
     transforms.Resize((224, 224)),
     # transforms.RandomHorizontalFlip(p=0.5),
@@ -24,18 +25,18 @@ valid_transform = transforms.Compose([
 # ====================================================
 
 
-# ============ Config related to Train running ============
-epochs = 100
-batch_size = 128
-learning_rate = 1e-3
-# =========================================================
-
-
 # ============ Config related to DataLoader ============
 train_shuffle = True   # DataLoader.shuffle
 valid_shuffle = False
 num_workers = 4         # DataLoader.num_workers
 # =======================================================
+
+
+# ============ Config related to Train running ============
+epochs = 100
+batch_size = 128
+learning_rate = 1e-3
+# =========================================================
 
 
 # ============ Config related to CrossEntropy Loss ============
