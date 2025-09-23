@@ -14,8 +14,8 @@ num_classes = 149
 
 
 # ============ Config related to Dataset ============
-train_data_path = "PokemonDataset_Sample/train"
-valid_data_path = "PokemonDataset_Sample/valid"
+train_data_path = "PokemonDataset_Split/train"
+valid_data_path = "PokemonDataset_Split/valid"
 
 train_transform = transforms.Compose([
     transforms.Resize(256),                 # short side resize 256
@@ -44,6 +44,9 @@ num_workers = 4         # DataLoader.num_workers
 epochs = 100
 batch_size = 128
 learning_rate = 1e-3
+# early stop
+patience = 0
+early_stopping = 1
 # =========================================================
 
 

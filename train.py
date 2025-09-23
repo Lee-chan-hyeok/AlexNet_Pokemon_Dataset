@@ -10,7 +10,8 @@ import torchvision
 from model import ChleeCNN
 # import origin_config
 # import origin_config_batch64 as config
-import origin_config_PaperTransform as config
+# import origin_config_PaperTransform as config
+import origin_config_RandomRotation as config
 from datasets import PokemonDataset
 from tqdm import tqdm
 
@@ -69,12 +70,12 @@ def run_epoch(
             images, labels = batch
             images, labels = images.to(device), labels.to(device)
             
-            outputs = model(images)
-            loss = loss_fn(outputs, labels)
+            outputs = model(images)             # 모델의 예측 값. shape: [batch_size, num_classes]
+            loss = loss_fn(outputs, labels)     # 예측값과 정답값을 비교해서 손실값 계산
             
-            optimizer.zero_grad()   # optimizer gradient를 0으로 초기화
-            loss.backward()
-            optimizer.step()
+            optimizer.zero_grad()   # 파이토치에서 gradient가 누적되기 때문에 매 iter마다 0으로 초기화
+            loss.backward()         # 각 parameter(weight, bias 등)의 gradient를 계산 -> "현재 파라미터가 얼마나 잘못되어있냐"를 계산함.
+            optimizer.step()        # 계산된 gradient를 통해 parameter(weight, bias 등)를 업데이트
 
             # Train Loss 누적
             train_loss += loss.item() * labels.size(0)
@@ -127,7 +128,7 @@ def run_epoch(
     return loss_dict, accuracy_dict
 
 
-def save_loss_accuracy_graph(train_loss_list, valid_loss_list, train_accuracy_list, valid_accuracy_list, cfg):
+def save_loss_accuracy_graph(train_loss_list, valid_loss_list, train_accuracy_list, valid_accuracy_list, model_save_path, cfg):
     epochs = range(1, len(train_loss_list) + 1)
 
     plt.figure(figsize=(12, 5))
@@ -153,8 +154,8 @@ def save_loss_accuracy_graph(train_loss_list, valid_loss_list, train_accuracy_li
 
     plt.tight_layout()
 
-    save_dir = os.path.join("results", {cfg.exp_name})
-    os.makedirs(exist_ok=True)
+    save_dir = os.path.join(model_save_path, "result_graph")
+    os.makedirs(save_dir, exist_ok=True)
     
     save_path = os.path.join(save_dir, "loss_accuracy_graph.png")
     plt.savefig(save_path)
@@ -163,7 +164,7 @@ def save_loss_accuracy_graph(train_loss_list, valid_loss_list, train_accuracy_li
     logging.info(f"Loss and Accuracy Graph is saved at {save_path}!")
 
 
-def save_lr_graph(lr_list: list, cfg):
+def save_lr_graph(lr_list: list, model_save_path, cfg):
     epochs = range(1, len(lr_list) + 1)
     plt.figure(figsize=(8,5))
     plt.plot(epochs, lr_list, label="Learning Rate")
@@ -173,7 +174,7 @@ def save_lr_graph(lr_list: list, cfg):
     plt.legend()
     plt.grid(True)
     
-    save_dir = os.path.join("results", cfg.exp_name)
+    save_dir = os.path.join(model_save_path, "result_graph")
     os.makedirs(save_dir, exist_ok=True)
     
     save_path = os.path.join(save_dir, "lr_graph.png")
@@ -264,8 +265,8 @@ def main():
     loss_fn = nn.CrossEntropyLoss(label_smoothing=cfg.loss_label_smoothing)
 
     latest_loss = float(np.inf)
-    patience = 0
-    early_stopping = 10
+    patience = cfg.patience
+    early_stopping = cfg.early_stopping
 
     train_loss_list, valid_loss_list = [], []
     train_accuracy_list, valid_accuracy_list = [], []
@@ -301,8 +302,8 @@ def main():
                 logging.info(f"Early stopping!")
                 break
 
-    save_loss_accuracy_graph(train_loss_list, valid_loss_list, train_accuracy_list, valid_accuracy_list, cfg)
-    save_lr_graph(lr_list, cfg)
+    save_loss_accuracy_graph(train_loss_list, valid_loss_list, train_accuracy_list, valid_accuracy_list, model_save_path, cfg)
+    save_lr_graph(lr_list, model_save_path, cfg)
 
 if __name__ == "__main__":
     main()
