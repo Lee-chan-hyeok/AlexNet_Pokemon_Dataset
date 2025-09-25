@@ -11,7 +11,10 @@ from model import ChleeCNN
 # import origin_config
 # import origin_config_batch64 as config
 # import origin_config_PaperTransform as config
-import origin_config_RandomRotation as config
+# import origin_config_RandomRotation as config
+# import origin_config_PaperTransform_VerticalFlip as config
+# import origin_config_Horizontal_Vertical_ColorJitter as config
+import HorizontalFlip_RandomRotation_ColorJitter_config as config
 from datasets import PokemonDataset
 from tqdm import tqdm
 
@@ -52,6 +55,7 @@ def run_epoch(
       model: ChleeCNN,
       data_loader: dict,
       optimizer: optim,
+      lr_scheduler: optim.lr_scheduler,
       loss_fn: nn.CrossEntropyLoss,
       epoch: int,
       device: str
@@ -65,16 +69,16 @@ def run_epoch(
     train_accuracy = 0
     train_total_samples = 0
     
-    with tqdm(train_loader, desc=f"Epoch {epoch+1} training...") as t_loader:
+    with tqdm(train_loader, desc=f"Epoch {epoch+1} training") as t_loader:
         for batch in t_loader:
             images, labels = batch
             images, labels = images.to(device), labels.to(device)
             
-            outputs = model(images)             # 모델의 예측 값. shape: [batch_size, num_classes]
-            loss = loss_fn(outputs, labels)     # 예측값과 정답값을 비교해서 손실값 계산
+            outputs = model(images)             # 모델의 예측 값. shape: (batch_size, num_classes)
+            loss = loss_fn(outputs, labels)     # 예측값과 정답값을 비교해서 loss값 계산
             
-            optimizer.zero_grad()   # 파이토치에서 gradient가 누적되기 때문에 매 iter마다 0으로 초기화
-            loss.backward()         # 각 parameter(weight, bias 등)의 gradient를 계산 -> "현재 파라미터가 얼마나 잘못되어있냐"를 계산함.
+            optimizer.zero_grad()   # gradient가 누적되기 때문에 매 iter마다 0으로 초기화
+            loss.backward()         # 각 parameter(weight, bias 등)의 gradient를 계산 -> gradient를 통해 현재 파라미터가 얼마나 잘못되어있는지를 판단함.
             optimizer.step()        # 계산된 gradient를 통해 parameter(weight, bias 등)를 업데이트
 
             # Train Loss 누적
@@ -183,19 +187,23 @@ def save_lr_graph(lr_list: list, model_save_path, cfg):
     logging.info(f"Learning Rate graph saved at {save_path}")
 
 
-def save_checkpoint(model, optimizer, epoch, save_path, filename, loss=None, scheduler=None):
+def save_checkpoint(model, save_path, filename, optimizer=None, epoch=None, loss=None, scheduler=None):
     checkpoint = {
-        'epoch': epoch,
         'model_state_dict': model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
     }
+
+    if optimizer:
+        checkpoint['optimizer_state_dict'] = optimizer.state_dict()
     
-    if scheduler is not None:
-        checkpoint['scheduler_state_dict'] = scheduler.state_dict()
-    
-    if loss is not None:
+    if epoch:
+        checkpoint['epoch'] = epoch
+
+    if loss:
         checkpoint['loss'] = loss
-    
+
+    if scheduler:
+        checkpoint['scheduler_state_dict'] = scheduler.state_dict()
+        
     torch.save(checkpoint, os.path.join(save_path, filename))
 
 
@@ -206,11 +214,12 @@ def main():
     model_save_path = os.path.join("checkpoint", cfg.exp_name)
     os.makedirs(model_save_path, exist_ok=True)
 
+
     # ================ 로그 파일 + 화면 출력 설정 ================
     logging.basicConfig(
-        filename=os.path.join(model_save_path, "train_log.txt"),
-        level=logging.INFO,
-        format="%(asctime)s - %(message)s"
+    filename=os.path.join(model_save_path, "train_log.txt"),
+    level=logging.INFO,
+    format="%(asctime)s - %(message)s"
     )
 
     console = logging.StreamHandler()
@@ -219,7 +228,8 @@ def main():
     console.setFormatter(formatter)
     logging.getLogger("").addHandler(console)
     # =========================================================
-    
+
+
     # 'cuda', 'cpu
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"device: {device}")
@@ -258,7 +268,7 @@ def main():
 
     # Init optimizer
     optimizer = optim.Adam(params=model.parameters(), lr=cfg.learning_rate)
-    # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)  # 10 epoch마다 lr을 0.1배 감소
+    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)  # 30 epoch마다 lr *= 0.1
     # scheduler = WarmupCosineAnnealingLR(optimizer, total_epochs=cfg.epochs, warmup_epochs=5, eta_min=1e-6)
 
     # Init Loss Function -> CrossEntropyLoss
@@ -274,12 +284,12 @@ def main():
 
     # Train Loop
     for epoch in range(cfg.epochs):
-        loss_dict, accuracy_dict = run_epoch(model, loader_dict, optimizer, loss_fn, epoch, device)
-        
+        loss_dict, accuracy_dict = run_epoch(model, loader_dict, optimizer, lr_scheduler, loss_fn, epoch, device)
+
         current_lr = optimizer.param_groups[0]['lr']
         lr_list.append(current_lr)
         
-        # scheduler.step()
+        lr_scheduler.step()
 
         train_loss_list.append(loss_dict['train_loss'])
         valid_loss_list.append(loss_dict['valid_loss'])
@@ -292,15 +302,19 @@ def main():
             patience = 0
 
             # checkpoint 저장 및 resume까지 고려하여 저장
-            save_checkpoint(model, optimizer, epoch, model_save_path, f"epoch_{epoch+1}.pt", loss=loss_dict['train_loss'])
+            save_checkpoint(model, model_save_path, f"epoch_{epoch+1}.pt")
             # early stopping을 위한 best.pt만 고려하여 저장
-            save_checkpoint(model, optimizer, epoch, model_save_path, "best.pt", loss=loss_dict['valid_loss'])
+            save_checkpoint(model, model_save_path, "best.pt")
             logging.info(f"##### Saved best.pt file at {epoch+1}epoch #####")
         else:
             patience += 1
             if patience >= early_stopping:
                 logging.info(f"Early stopping!")
                 break
+
+        if epoch+1 % 5 == 0:
+            save_loss_accuracy_graph(train_loss_list, valid_loss_list, train_accuracy_list, valid_accuracy_list, model_save_path, cfg)
+            save_lr_graph(lr_list, model_save_path, cfg)
 
     save_loss_accuracy_graph(train_loss_list, valid_loss_list, train_accuracy_list, valid_accuracy_list, model_save_path, cfg)
     save_lr_graph(lr_list, model_save_path, cfg)
