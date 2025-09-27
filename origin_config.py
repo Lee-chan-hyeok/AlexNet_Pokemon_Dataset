@@ -7,8 +7,9 @@ num_classes = 149
 
 
 # ============ Config related to Dataset ============
-train_data_path = "PokemonDataset_Sample/train"
-valid_data_path = "PokemonDataset_Sample/valid"
+train_data_path = "PokemonDataset_Split/train"
+valid_data_path = "PokemonDataset_Split/valid"
+test_data_path = "PokemonDataset_Split/test"
 
 # train No Aug
 train_transform = transforms.Compose([

@@ -14,7 +14,8 @@ from model import ChleeCNN
 # import origin_config_RandomRotation as config
 # import origin_config_PaperTransform_VerticalFlip as config
 # import origin_config_Horizontal_Vertical_ColorJitter as config
-import HorizontalFlip_RandomRotation_ColorJitter_config as config
+# import HorizontalFlip_RandomRotation_ColorJitter_config as config
+import HorizontalFlip_RandomRotation_ColorJitter_WarmupCosAnnealing_config as config
 from datasets import PokemonDataset
 from tqdm import tqdm
 
@@ -268,8 +269,8 @@ def main():
 
     # Init optimizer
     optimizer = optim.Adam(params=model.parameters(), lr=cfg.learning_rate)
-    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)  # 30 epoch마다 lr *= 0.1
-    # scheduler = WarmupCosineAnnealingLR(optimizer, total_epochs=cfg.epochs, warmup_epochs=5, eta_min=1e-6)
+    # lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)  # 30 epoch마다 lr *= 0.1
+    lr_scheduler = WarmupCosineAnnealingLR(optimizer, total_epochs=cfg.epochs, warmup_epochs=5, eta_min=1e-6)
 
     # Init Loss Function -> CrossEntropyLoss
     loss_fn = nn.CrossEntropyLoss(label_smoothing=cfg.loss_label_smoothing)
@@ -312,7 +313,7 @@ def main():
                 logging.info(f"Early stopping!")
                 break
 
-        if epoch+1 % 5 == 0:
+        if (epoch+1) % 5 == 0:
             save_loss_accuracy_graph(train_loss_list, valid_loss_list, train_accuracy_list, valid_accuracy_list, model_save_path, cfg)
             save_lr_graph(lr_list, model_save_path, cfg)
 
